@@ -4,7 +4,7 @@ SonicCage 1.1 is a small macOS menu-bar utility for games that forget to capture
 
 ## Use
 
-1. Open `SonicCage/Package.swift` in Xcode, or open the included `SonicCage.app` after building.
+1. Open `SonicCage/Package.swift` in Xcode, or open the included `SonicCage.app`. **Incase gatekeeper doesn't let you open SonicCage.app then run `xattr -d com.apple.quarantine /Applications/SonicCage.app` assuming you have already moved it to the Applications folder.**
 2. Click the lock icon in the menu bar and choose **Open Accessibility Settings…**. Enable the **SonicCage** entry, then return to the app; it rechecks the permission when it becomes active.
 3. Leave **Arm SonicCage** on. It recognises `SonicDreamTeam.app` by default, and you can add more games in Settings. It only begins confining the cursor while a protected game is frontmost, and immediately releases on any focus change, game quit, or SonicCage quit.
 4. Use the **Emergency Toggle** at any time to turn the cage on or off. It defaults to **⌥⌘L**, but you can choose another combination in Settings. This is intentionally global, so it remains an escape hatch even if the mouse cannot reach the menu bar.
