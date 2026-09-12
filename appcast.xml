@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>SonicCage</title>
+        <item>
+            <title>1.1</title>
+            <pubDate>Sat, 12 Sep 2026 12:29:49 +0100</pubDate>
+            <link>https://github.com/fraise-a/SonicCage</link>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/fraise-a/SonicCage/releases/download/1.1/SonicCage-1.1.dmg" length="2820822" type="application/octet-stream" sparkle:edSignature="M7ji8rU4eQCYgI5Pqp98Dw/ocon7E+OeZ/J6kbarll99MhZdGbli+/QLp5xxoSuAPXmQ846rno4EYBzmQQA7Aw=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: zpJRJNs3t4ggN2IBg6Lxwy3vJkzSM7o+ls0xlHBrSsVQ0sFVlVYQsH4P+5rvizexKGChL+myPC+83lEyMrJXDA==
+length: 1178
+-->
