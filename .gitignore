@@ -1,1 +1,45 @@
+# macOS Finder metadata
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager and Xcode build products / local user state
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Other editor and scratch files
+.idea/
+.vscode/
+*.swp
+*~
+*.orig
+
+# Codex's per-workspace local configuration
+.codex/
+
+# Generated development and release products. The signed feed that users read
+# is intentionally at the repository root as appcast.xml, so it is not ignored.
+dist/
+release/*.app/
+release/archives/*.dmg
+release/archives/*.delta
+release/archives/appcast.xml
+release/archives/old_updates/
+release/.build-stage.*
+release/.dmg-stage.*
+release/.dmg-output.*
+
+# Interrupted local setup files; script/sparkle.env and script/version.env are
+# deliberately not ignored because they contain only public configuration.
+script/.sparkle.env.*
+script/.version.env.*
+
+# Never commit distribution credentials if one is ever exported manually.
+*.p12
+*.p8
+*.key
+*.mobileprovision

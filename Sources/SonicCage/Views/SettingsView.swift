@@ -42,21 +42,53 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Protected App") {
-                LabeledContent("App", value: state.target.displayName)
+            Section("Protected Games") {
+                if state.protectedApps.isEmpty {
+                    Text("No games are protected yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(state.protectedApps) { app in
+                        HStack {
+                            Text(app.displayName)
+                            Spacer()
+                            Button(role: .destructive) {
+                                state.removeProtectedApp(app)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove \(app.displayName)")
+                            .help("Remove \(app.displayName) from protected games")
+                        }
+                    }
+                }
+
                 HStack {
-                    Button("Choose Another App…") {
+                    Button("Add Game…") {
                         state.chooseTargetApplication()
                     }
-                    Button("Use Sonic Dream Team") {
-                        state.restoreSonicDreamTeam()
+                    Button("Add Sonic Dream Team") {
+                        state.addSonicDreamTeam()
                     }
-                    .disabled(state.target.isSonicDreamTeam)
-                    .help(state.target.isSonicDreamTeam ? "Sonic Dream Team is already selected." : "Use Sonic Dream Team as the protected app.")
+                    .disabled(state.sonicDreamTeamIsProtected)
+                    .help(state.sonicDreamTeamIsProtected ? "Sonic Dream Team is already protected." : "Add Sonic Dream Team to protected games.")
                 }
-                Text("Sonic Dream Team is recognised as SonicDreamTeam.app. The cage only activates while this app is frontmost, and releases immediately when you switch away or the app quits.")
+                Text("Sonic Dream Team is recognised as SonicDreamTeam.app. SonicCage activates while any game in this list is frontmost, and releases immediately when you switch away or the game quits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Game Controllers") {
+                Toggle("Don't arm while a controller is connected", isOn: $state.pausesForConnectedController)
+                Text("Enabled by default, this keeps SonicCage off when macOS detects a game controller. If a controller connects while a game is protected, SonicCage releases the pointer straight away. Turn it off if you use a controller and mouse together.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if state.gameControllerConnected {
+                    Label("A game controller is currently connected.", systemImage: "gamecontroller.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Screen Edges") {

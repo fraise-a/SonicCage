@@ -12,11 +12,14 @@ final class AppState: ObservableObject {
     @Published var bottomMargin: CGFloat { didSet { persistAndRefresh() } }
     @Published var trailingMargin: CGFloat { didSet { persistAndRefresh() } }
     @Published var keepsOneDisplay: Bool { didSet { persistAndRefresh() } }
+    @Published var pausesForConnectedController: Bool { didSet { persistAndRefresh() } }
     @Published private(set) var accessibilityGranted: Bool
     @Published private(set) var effectiveIsActive = false
     @Published private(set) var currentFrontmostApp = "No active application"
     @Published private(set) var lastError: String?
-    @Published private(set) var target: AppTarget
+    @Published private(set) var protectedApps: [AppTarget]
+    @Published private(set) var activeProtectedApp: AppTarget?
+    @Published private(set) var gameControllerConnected: Bool
     @Published private(set) var emergencyShortcut: GlobalShortcut
     @Published private(set) var emergencyShortcutError: String?
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus
@@ -29,6 +32,9 @@ final class AppState: ObservableObject {
     private lazy var shortcut = GlobalShortcutManager(shortcut: emergencyShortcut) { [weak self] in
         Task { @MainActor in self?.toggleArmed() }
     }
+    private lazy var controllerMonitor = ControllerMonitor { [weak self] in
+        Task { @MainActor [weak self] in self?.refresh() }
+    }
 
     init() {
         isArmed = defaults.object(forKey: Keys.isArmed) as? Bool ?? true
@@ -37,6 +43,7 @@ final class AppState: ObservableObject {
         bottomMargin = CGFloat(defaults.object(forKey: Keys.bottomMargin) as? Double ?? 16)
         trailingMargin = CGFloat(defaults.object(forKey: Keys.trailingMargin) as? Double ?? 2)
         keepsOneDisplay = defaults.object(forKey: Keys.keepsOneDisplay) as? Bool ?? true
+        pausesForConnectedController = defaults.object(forKey: Keys.pausesForConnectedController) as? Bool ?? true
         let restoredShortcut = GlobalShortcut(
             keyCode: UInt32(defaults.object(forKey: Keys.emergencyShortcutKeyCode) as? Int
                 ?? Int(GlobalShortcut.defaultEmergency.keyCode)),
@@ -50,25 +57,19 @@ final class AppState: ObservableObject {
             : .defaultEmergency
         accessibilityGranted = false
         lastError = nil
+        protectedApps = Self.restoredProtectedApps(from: defaults)
+        activeProtectedApp = nil
+        gameControllerConnected = false
         emergencyShortcutError = nil
         launchAtLoginStatus = .disabled
         launchAtLoginError = nil
-
-        let name = defaults.string(forKey: Keys.targetName) ?? AppTarget.sonicDreamTeam.displayName
-        let identifier = defaults.string(forKey: Keys.targetBundleIdentifier)
-        let path = defaults.string(forKey: Keys.targetBundlePath)
-        target = AppTarget(
-            displayName: name,
-            bundleIdentifier: identifier,
-            bundlePath: path,
-            bundleFileName: defaults.string(forKey: Keys.targetBundleFileName)
-                ?? (identifier == nil && path == nil ? AppTarget.sonicDreamTeam.bundleFileName : nil)
-        )
 
         refreshLaunchAtLoginStatus()
         refreshAccessibilityStatus()
         observeApplicationChanges()
         _ = shortcut
+        _ = controllerMonitor
+        persistProtectedApps()
         if !shortcut.isRegistered {
             emergencyShortcutError = "\(emergencyShortcut.displayName) could not be registered. Choose a different shortcut or use Turn Off from the menu bar before playing."
         }
@@ -131,8 +132,13 @@ final class AppState: ObservableObject {
 
     func refresh() {
         refreshAccessibilityStatus()
+        gameControllerConnected = controllerMonitor.isControllerConnected
         currentFrontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "No active application"
-        let shouldConstrain = isArmed && accessibilityGranted && targetIsFrontmost()
+        let frontmostProtectedApp = protectedAppThatIsFrontmost()
+        let shouldConstrain = isArmed
+            && accessibilityGranted
+            && frontmostProtectedApp != nil
+            && !(pausesForConnectedController && gameControllerConnected)
 
         confinement.update(
             margins: .init(
@@ -147,11 +153,14 @@ final class AppState: ObservableObject {
         if shouldConstrain {
             if !confinement.start() {
                 lastError = "macOS could not create the mouse control service. Re-enable Accessibility permission, then try again."
+                activeProtectedApp = nil
             } else {
                 lastError = nil
+                activeProtectedApp = frontmostProtectedApp
             }
         } else {
             confinement.stop()
+            activeProtectedApp = nil
         }
         effectiveIsActive = confinement.isActive
     }
@@ -168,7 +177,7 @@ final class AppState: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let bundle = Bundle(url: url)
-        target = AppTarget(
+        let target = AppTarget(
             displayName: bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
                 ?? bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String
                 ?? url.deletingPathExtension().lastPathComponent,
@@ -176,13 +185,16 @@ final class AppState: ObservableObject {
             bundlePath: url.path,
             bundleFileName: url.deletingPathExtension().lastPathComponent
         )
-        persistTarget()
-        refresh()
+        addProtectedApp(target)
     }
 
-    func restoreSonicDreamTeam() {
-        target = .sonicDreamTeam
-        persistTarget()
+    func addSonicDreamTeam() {
+        addProtectedApp(.sonicDreamTeam)
+    }
+
+    func removeProtectedApp(_ target: AppTarget) {
+        protectedApps.removeAll { $0.id == target.id }
+        persistProtectedApps()
         refresh()
     }
 
@@ -209,10 +221,20 @@ final class AppState: ObservableObject {
     }
 
     var statusText: String {
-        if effectiveIsActive { return "Caging pointer in \(target.displayName)" }
+        if effectiveIsActive, let activeProtectedApp {
+            return "Caging pointer in \(activeProtectedApp.displayName)"
+        }
         if !isArmed { return "Off" }
+        if pausesForConnectedController && gameControllerConnected {
+            return "Controller connected — paused"
+        }
         if !accessibilityGranted { return "Needs Accessibility permission" }
-        return "On — waiting for \(target.displayName)"
+        if protectedApps.isEmpty { return "On — add a protected game" }
+        return "On — waiting for a protected game"
+    }
+
+    var sonicDreamTeamIsProtected: Bool {
+        protectedApps.contains(where: \.isSonicDreamTeam)
     }
 
     private func observeApplicationChanges() {
@@ -236,20 +258,26 @@ final class AppState: ObservableObject {
         ]
     }
 
-    private func targetIsFrontmost() -> Bool {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
+    private func protectedAppThatIsFrontmost() -> AppTarget? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        return protectedApps.first { target in
+            targetMatches(target, application: app)
+        }
+    }
+
+    private func targetMatches(_ target: AppTarget, application: NSRunningApplication) -> Bool {
         if let identifier = target.bundleIdentifier {
-            return app.bundleIdentifier == identifier
+            return application.bundleIdentifier == identifier
         }
         if let path = target.bundlePath {
-            return app.bundleURL?.path == path
+            return application.bundleURL?.path == path
         }
         if let bundleFileName = target.bundleFileName,
-           let activeFileName = app.bundleURL?.deletingPathExtension().lastPathComponent,
+           let activeFileName = application.bundleURL?.deletingPathExtension().lastPathComponent,
            activeFileName.caseInsensitiveCompare(bundleFileName) == .orderedSame {
             return true
         }
-        return app.localizedName?.caseInsensitiveCompare(target.displayName) == .orderedSame
+        return application.localizedName?.caseInsensitiveCompare(target.displayName) == .orderedSame
     }
 
     private func persistAndRefresh() {
@@ -259,14 +287,46 @@ final class AppState: ObservableObject {
         defaults.set(Double(bottomMargin), forKey: Keys.bottomMargin)
         defaults.set(Double(trailingMargin), forKey: Keys.trailingMargin)
         defaults.set(keepsOneDisplay, forKey: Keys.keepsOneDisplay)
+        defaults.set(pausesForConnectedController, forKey: Keys.pausesForConnectedController)
         refresh()
     }
 
-    private func persistTarget() {
-        defaults.set(target.displayName, forKey: Keys.targetName)
-        defaults.set(target.bundleIdentifier, forKey: Keys.targetBundleIdentifier)
-        defaults.set(target.bundlePath, forKey: Keys.targetBundlePath)
-        defaults.set(target.bundleFileName, forKey: Keys.targetBundleFileName)
+    private func addProtectedApp(_ app: AppTarget) {
+        guard !protectedApps.contains(where: { $0.id == app.id }) else { return }
+        protectedApps.append(app)
+        persistProtectedApps()
+        refresh()
+    }
+
+    private func persistProtectedApps() {
+        guard let data = try? JSONEncoder().encode(protectedApps) else { return }
+        defaults.set(data, forKey: Keys.protectedApps)
+    }
+
+    private static func restoredProtectedApps(from defaults: UserDefaults) -> [AppTarget] {
+        if let data = defaults.data(forKey: Keys.protectedApps),
+           let savedApps = try? JSONDecoder().decode([AppTarget].self, from: data) {
+            return deduplicated(savedApps)
+        }
+
+        // Carry the 1.0 choice into 1.1 on first launch so no reconfiguration
+        // is required after upgrading.
+        let name = defaults.string(forKey: Keys.targetName) ?? AppTarget.sonicDreamTeam.displayName
+        let identifier = defaults.string(forKey: Keys.targetBundleIdentifier)
+        let path = defaults.string(forKey: Keys.targetBundlePath)
+        let legacyTarget = AppTarget(
+            displayName: name,
+            bundleIdentifier: identifier,
+            bundlePath: path,
+            bundleFileName: defaults.string(forKey: Keys.targetBundleFileName)
+                ?? (identifier == nil && path == nil ? AppTarget.sonicDreamTeam.bundleFileName : nil)
+        )
+        return [legacyTarget]
+    }
+
+    private static func deduplicated(_ apps: [AppTarget]) -> [AppTarget] {
+        var seenIDs = Set<String>()
+        return apps.filter { seenIDs.insert($0.id).inserted }
     }
 
     private enum Keys {
@@ -276,6 +336,8 @@ final class AppState: ObservableObject {
         static let bottomMargin = "bottomMargin"
         static let trailingMargin = "trailingMargin"
         static let keepsOneDisplay = "keepsOneDisplay"
+        static let pausesForConnectedController = "pausesForConnectedController"
+        static let protectedApps = "protectedApps"
         static let targetName = "targetName"
         static let targetBundleIdentifier = "targetBundleIdentifier"
         static let targetBundlePath = "targetBundlePath"

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StatusMenuView: View {
     @EnvironmentObject private var state: AppState
+    @EnvironmentObject private var updater: SonicCageUpdater
 
     var body: some View {
         Text(state.statusText)
@@ -22,9 +23,18 @@ struct StatusMenuView: View {
             }
         }
 
+        Button("About SonicCage") {
+            AppDelegate.showAboutSonicCage()
+        }
+
         SettingsLink {
             Text("Settings…")
         }
+
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Divider()
 
