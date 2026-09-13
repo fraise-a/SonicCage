@@ -56,3 +56,4 @@ The rename uses the distinct identity `com.fraise.SonicCage`, so macOS will ask 
 - It only suppresses pointer movement or dragging that would cross the configured display edge; clicks and keyboard input are untouched.
 - If the system disables the event tap, SonicCage attempts to re-enable it only while it is actively protecting the selected game.
 - Quitting the app removes the event tap immediately.
+- Made with AI-assisted code.
